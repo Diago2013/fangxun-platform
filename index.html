@@ -217,7 +217,7 @@ body{
     <span class="live-badge"><span class="live-dot"></span>LIVE</span>
   </div>
   <div class="top-right">
-    <div class="refresh-info" id="refreshLabel">下次数据刷新: 29分钟</div>
+    <div class="refresh-info" id="refreshLabel">下次数据刷新: 4s</div>
     <div class="clock-block">
       <div class="clock" id="clock">--:--:--</div>
       <div class="clock-date" id="clockDate">----年--月--日</div>
@@ -368,27 +368,31 @@ function updateUI(){
 }
 
 // ============================================================
-// MAP
+// MAP — 延迟初始化，在 init() 中调用
 // ============================================================
-var map = L.map('map').setView([35,114], 5);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-  attribution:'&copy; OSM',maxZoom:18
-}).addTo(map);
-
+var map = null;
 var markers = {};
-stations.forEach(function(s){
-  var m = L.circleMarker([s.lat,s.lng],{
-    radius:10,fillColor:getColor(s),color:'#fff',weight:2,fillOpacity:0.92
-  }).addTo(map);
-  m.bindPopup(
-    '<div style="font-size:14px"><b>'+s.name+'站</b> <span style="font-size:11px;color:#888">'+(basins.find(function(b){return b.id===s.basin})||{}).name+'</span></div>'+
-    '<div style="font-size:13px;margin-top:8px">当前水位: <b style="font-size:16px">'+s.water+'m</b></div>'+
-    '<div style="font-size:11px;color:#888;margin-top:2px">警戒线: '+s.alarm+'m ｜ 保证线: '+s.guarantee+'m</div>'+
-    (s.level!=='safe'?'<div style="font-size:12px;margin-top:6px;color:'+(s.level==='danger'?'#A32D2D':'#B87A1A')+';font-weight:600">&#9888; '+(s.level==='danger'?'超保证水位！请立即启动应急预案':'超警戒水位，密切关注')+'</div>':'')
-  );
-  m.stationId = s.id;
-  markers[s.id] = m;
-});
+function initMap(){
+  try{
+    map = L.map('map').setView([35,114], 5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+      attribution:'&copy; OSM',maxZoom:18
+    }).addTo(map);
+    stations.forEach(function(s){
+      var m = L.circleMarker([s.lat,s.lng],{
+        radius:10,fillColor:getColor(s),color:'#fff',weight:2,fillOpacity:0.92
+      }).addTo(map);
+      m.bindPopup(
+        '<div style="font-size:14px"><b>'+s.name+'站</b> <span style="font-size:11px;color:#888">'+(basins.find(function(b){return b.id===s.basin})||{}).name+'</span></div>'+
+        '<div style="font-size:13px;margin-top:8px">当前水位: <b style="font-size:16px">'+s.water+'m</b></div>'+
+        '<div style="font-size:11px;color:#888;margin-top:2px">警戒线: '+s.alarm+'m ｜ 保证线: '+s.guarantee+'m</div>'+
+        (s.level!=='safe'?'<div style="font-size:12px;margin-top:6px;color:'+(s.level==='danger'?'#A32D2D':'#B87A1A')+';font-weight:600">&#9888; '+(s.level==='danger'?'超保证水位！请立即启动应急预案':'超警戒水位，密切关注')+'</div>':'')
+      );
+      m.stationId = s.id;
+      markers[s.id] = m;
+    });
+  }catch(e){console.error('地图初始化失败:',e);}
+}
 function getColor(s){return s.level==='danger'?'#E24B4A':s.level==='warning'?'#EF9F27':'#1D9E75';}
 function updateMapMarkers(){
   stations.forEach(function(s){var m=markers[s.id];if(m)m.setStyle({fillColor:getColor(s)});});
@@ -464,27 +468,35 @@ function renderAlertList(alerts){
 }
 
 // ============================================================
-// CHART
+// CHART — 延迟初始化，在 init() 中调用
 // ============================================================
-var rtCtx=document.getElementById('rtChart').getContext('2d');
-var rtChart=new Chart(rtCtx,{
-  type:'line',
-  data:{labels:[],datasets:[
-    {label:'汉口(长江)',borderColor:'#185FA5',data:[],tension:0.3,pointRadius:0,borderWidth:2},
-    {label:'花园口(黄河)',borderColor:'#B87A1A',data:[],tension:0.3,pointRadius:0,borderWidth:2},
-    {label:'柳州(珠江)',borderColor:'#0F6E56',data:[],tension:0.3,pointRadius:0,borderWidth:2}
-  ]},
-  options:{
-    responsive:true,maintainAspectRatio:false,animation:{duration:300},
-    plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:16,font:{size:11},usePointStyle:true}}},
-    scales:{
-      y:{grid:{color:'rgba(128,128,128,0.08)'},ticks:{font:{size:10}}},
-      x:{grid:{display:false},ticks:{font:{size:9},maxTicksLimit:6}}
-    }
-  }
-});
+var rtChart=null;
+var cd={hankou:[],huayuankou:[],liuzhou:[],labels:[]};
+function initChart(){
+  try{
+    var ctx=document.getElementById('rtChart');
+    if(!ctx)return;
+    rtChart=new Chart(ctx.getContext('2d'),{
+      type:'line',
+      data:{labels:[],datasets:[
+        {label:'汉口(长江)',borderColor:'#185FA5',data:[],tension:0.3,pointRadius:0,borderWidth:2},
+        {label:'花园口(黄河)',borderColor:'#B87A1A',data:[],tension:0.3,pointRadius:0,borderWidth:2},
+        {label:'柳州(珠江)',borderColor:'#0F6E56',data:[],tension:0.3,pointRadius:0,borderWidth:2}
+      ]},
+      options:{
+        responsive:true,maintainAspectRatio:false,animation:{duration:300},
+        plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:16,font:{size:11},usePointStyle:true}}},
+        scales:{
+          y:{grid:{color:'rgba(128,128,128,0.08)'},ticks:{font:{size:10}}},
+          x:{grid:{display:false},ticks:{font:{size:9},maxTicksLimit:6}}
+        }
+      }
+    });
+  }catch(e){console.error('图表初始化失败:',e);}
+}
 var cd={hankou:[],huayuankou:[],liuzhou:[],labels:[]};
 function updateChart(){
+  if(!rtChart)return;
   var hk=stations.find(function(s){return s.id===3}),hyk=stations.find(function(s){return s.id===10}),lz=stations.find(function(s){return s.id===15});
   var t=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   cd.hankou.push(hk.water);cd.huayuankou.push(hyk.water);cd.liuzhou.push(lz.water);cd.labels.push(t);
@@ -511,17 +523,36 @@ function updateClock(){
   var n=new Date();
   document.getElementById('clock').textContent=n.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   document.getElementById('clockDate').textContent=n.getFullYear()+'年'+(n.getMonth()+1)+'月'+n.getDate()+'日 周'+['日','一','二','三','四','五','六'][n.getDay()];
-  var r=Math.max(0,1800-Math.floor((Date.now()-lastUpdate)/1000));
-  document.getElementById('refreshLabel').textContent='下次数据刷新: '+Math.ceil(r/60)+'分钟';
+  var r=Math.max(0,5-Math.floor((Date.now()-lastUpdate)/1000));
+  document.getElementById('refreshLabel').textContent='下次数据刷新: '+r+'s';
 }
 setInterval(updateClock,1000);
 
 // ============================================================
-// INIT
+// INIT — 确保 DOM 和 CDN 资源加载完成后初始化
 // ============================================================
-function init(){updateBasinCards();renderStationList();updateUI();updateClock();for(var i=0;i<20;i++)updateChart();}
-init();
-setInterval(function(){simulateData();updateChart();},1800000);
+var initialized = false;
+function init(){
+  if(typeof L === 'undefined' || typeof Chart === 'undefined'){
+    setTimeout(init,500);
+    return;
+  }
+  if(initialized)return;
+  initialized = true;
+  simulateData();
+  updateBasinCards();
+  renderStationList();
+  updateUI();
+  updateClock();
+  initMap();
+  initChart();
+  for(var i=0;i<20;i++)updateChart();
+  setInterval(function(){simulateData();updateChart();},5000);
+}
+document.addEventListener('DOMContentLoaded',function(){
+  setTimeout(init,200);
+});
+setTimeout(function(){if(!initialized)init();},4000);
 
 // ============================================================
 // THEME
