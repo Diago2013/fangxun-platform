@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>全国防汛实时监控平台</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{
+  --blue-50:#E6F1FB;--blue-100:#B5D4F4;--blue-400:#378ADD;--blue-600:#185FA5;--blue-800:#0C447C;
+  --amber-50:#FAEEDA;--amber-100:#FAC775;--amber-400:#EF9F27;--amber-600:#854F0B;
+  --coral-50:#FAECE7;--coral-400:#F0997B;--coral-600:#993C1D;
+  --red-50:#FCEBEB;--red-100:#F7C1C1;--red-400:#F09595;--red-600:#A32D2D;
+  --teal-50:#E1F5EE;--teal-400:#1D9E75;--teal-600:#0F6E56;
+  --gray-50:#F3F2EF;--gray-200:#D8D6CF;--gray-400:#B0AEA6;--gray-600:#6B6963;--gray-800:#2C2C2A;
+  --bg:#F0F1F3;--surface:#FFFFFF;--border:rgba(44,44,42,0.08);--text:#1A1A1D;--text2:#6B6963;
+  --radius:10px;--radius-lg:14px;--shadow-sm:0 1px 3px rgba(0,0,0,0.04);--shadow:0 2px 8px rgba(0,0,0,0.06);
+  --w-left:300px;--w-right:360px;
+}
+.dark{
+  --bg:#0D0D11;--surface:#16161B;--border:rgba(255,255,255,0.06);--text:#E8E8E6;--text2:#8E8E88;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.3);--shadow:0 2px 8px rgba(0,0,0,0.4);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:14px;line-height:1.55;color:var(--text);background:var(--bg);
+  height:100vh;overflow:hidden;user-select:none;
+}
+
+.top-bar{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 24px;display:flex;align-items:center;justify-content:space-between;
+  height:56px;flex-shrink:0;
+}
+.logo-area{display:flex;align-items:center;gap:14px}
+.logo-icon{
+  width:36px;height:36px;background:var(--blue-600);border-radius:10px;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700;
+}
+.logo-title{font-size:16px;font-weight:600;letter-spacing:-0.3px}
+.live-badge{
+  display:inline-flex;align-items:center;gap:6px;background:var(--red-50);color:var(--red-600);
+  padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:0.5px;
+}
+.live-dot{width:7px;height:7px;background:var(--red-600);border-radius:50%;animation:live-pulse 1s infinite}
+@keyframes live-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.3;transform:scale(0.65)}}
+
+.top-right{display:flex;align-items:center;gap:20px}
+.refresh-info{font-size:12px;color:var(--text2);text-align:right;line-height:1.4}
+.clock-block{text-align:right}
+.clock{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:1px}
+.clock-date{font-size:11px;color:var(--text2)}
+.btn-icon{
+  width:36px;height:36px;border-radius:9px;border:0.5px solid var(--border);
+  background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:17px;color:var(--text);transition:all 0.15s;
+}
+.btn-icon:hover{background:var(--blue-50);border-color:var(--blue-400);color:var(--blue-600)}
+
+.warning-strip{display:flex;height:40px;gap:1px;background:var(--border);flex-shrink:0}
+.ws-item{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:8px;
+  color:#fff;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.2s;
+  position:relative;
+}
+.ws-item:hover{filter:brightness(1.15)}
+.ws-normal{background:var(--teal-600)}
+.ws-blue{background:var(--blue-600)}
+.ws-amber{background:#B87A1A}
+.ws-coral{background:var(--coral-600)}
+.ws-red{background:var(--red-600)}
+.ws-count{font-size:20px;font-weight:700}
+.ws-item.active{box-shadow:inset 0 -3px 0 rgba(255,255,255,0.6)}
+.ws-item.active::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.6)}
+
+.main-grid{
+  display:grid;grid-template-columns:var(--w-left) 1fr var(--w-right);
+  height:calc(100vh - 96px);overflow:hidden;
+}
+
+.left-panel{
+  background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.panel-hd{padding:14px 18px 10px;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;flex-shrink:0}
+
+.basin-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 18px 12px}
+.basin-card{
+  padding:10px 12px;border-radius:var(--radius);border:0.5px solid var(--border);
+  cursor:pointer;transition:all 0.18s;background:var(--surface);
+}
+.basin-card:hover{transform:translateY(-1px);box-shadow:var(--shadow);border-color:var(--gray-400)}
+.basin-card.active{border-color:var(--blue-400);background:var(--blue-50);box-shadow:var(--shadow-sm)}
+.basin-name{font-size:12px;font-weight:600;margin-bottom:4px}
+.basin-stats{font-size:11px;color:var(--text2)}
+.basin-warn{color:var(--amber-600);font-weight:600}
+
+.station-list{overflow-y:auto;flex:1;padding:2px 0}
+.st-row{
+  display:flex;align-items:center;gap:10px;padding:8px 18px;cursor:pointer;
+  transition:background 0.1s;border-left:3px solid transparent;
+}
+.st-row:hover{background:var(--blue-50)}
+.st-row.active{border-left-color:var(--blue-400);background:var(--blue-50)}
+.st-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.st-dot.safe{background:var(--teal-400)}
+.st-dot.warning{background:var(--amber-400);animation:live-pulse 2s infinite}
+.st-dot.danger{background:var(--red-600);animation:live-pulse 0.8s infinite}
+.st-info{flex:1;min-width:0}
+.st-name{font-size:13px;font-weight:500}
+.st-basin{font-size:10px;color:var(--text2)}
+.st-val{font-size:14px;font-weight:600;text-align:right}
+.st-status{font-size:10px;color:var(--text2);text-align:right}
+
+.center-panel{position:relative;overflow:hidden}
+#map{width:100%;height:100%}
+.map-overlay-top{
+  position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:1000;
+  display:flex;gap:8px;
+}
+.map-filter-btn{
+  padding:7px 16px;border-radius:20px;border:0.5px solid var(--border);
+  background:var(--surface);font-size:12px;cursor:pointer;color:var(--text);
+  transition:all 0.18s;box-shadow:var(--shadow-sm);font-weight:500;
+}
+.map-filter-btn:hover{background:var(--blue-50);border-color:var(--blue-400)}
+.map-filter-btn.active{background:var(--blue-600);color:#fff;border-color:var(--blue-600)}
+
+.map-stats-bar{
+  position:absolute;bottom:14px;left:14px;right:14px;z-index:1000;
+  display:flex;gap:8px;
+}
+.msb-item{
+  flex:1;background:var(--surface);border-radius:var(--radius);
+  padding:12px 16px;box-shadow:var(--shadow);text-align:center;transition:transform 0.15s;
+}
+.msb-item:hover{transform:translateY(-1px)}
+.msb-value{font-size:24px;font-weight:700;line-height:1.1}
+.msb-label{font-size:11px;color:var(--text2);margin-top:2px}
+.msb-total .msb-value{color:var(--blue-600)}
+.msb-warning .msb-value{color:var(--amber-600)}
+.msb-danger .msb-value{color:var(--red-600)}
+.msb-normal .msb-value{color:var(--teal-600)}
+
+.right-panel{
+  background:var(--surface);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.alert-list{overflow-y:auto;padding:2px 0}
+.alert-item{
+  display:flex;gap:12px;padding:12px 18px;border-bottom:0.5px solid var(--border);
+  cursor:pointer;transition:background 0.12s;
+}
+.alert-item:hover{background:var(--blue-50)}
+.alert-tag{
+  padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;color:#fff;
+  flex-shrink:0;display:flex;align-items:center;height:24px;
+}
+.alert-tag.amber{background:#B87A1A}
+.alert-tag.red{background:var(--red-600)}
+.alert-body{flex:1;min-width:0}
+.alert-title{font-size:13px;font-weight:600;margin-bottom:3px}
+.alert-detail{font-size:11px;color:var(--text2)}
+.alert-time{font-size:11px;color:var(--text2);flex-shrink:0;align-self:flex-start;padding-top:2px}
+
+.chart-wrap{position:relative;height:220px;padding:6px 18px 12px}
+
+.log-section{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.log-scroll{overflow-y:auto;flex:1;padding:4px 18px 12px}
+.log-entry{
+  font-size:11px;font-family:"SF Mono","Cascadia Code","Consolas",monospace;
+  padding:3px 0;color:var(--text2);
+}
+.log-time{color:var(--gray-400);margin-right:6px}
+.log-station{color:var(--blue-600);margin-right:6px}
+.log-warn{color:var(--amber-600);font-weight:600}
+
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:2000;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity 0.2s;
+}
+.modal-overlay.open{opacity:1;pointer-events:auto}
+.modal{
+  background:var(--surface);border-radius:var(--radius-lg);
+  width:560px;max-height:80vh;overflow-y:auto;
+  padding:32px;box-shadow:0 12px 48px rgba(0,0,0,0.25);position:relative;
+}
+.modal h3{font-size:18px;margin-bottom:20px}
+.modal-close{
+  position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;
+  border:0.5px solid var(--border);background:var(--surface);cursor:pointer;
+  font-size:18px;display:flex;align-items:center;justify-content:center;
+  color:var(--text);transition:all 0.15s;
+}
+.modal-close:hover{background:var(--red-50);color:var(--red-600);border-color:var(--red-400)}
+.modal-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border)}
+.modal-label{color:var(--text2)}
+.modal-value{font-weight:600}
+.modal-warn{padding:14px;background:var(--amber-50);border-radius:var(--radius);margin-top:14px;font-size:13px;line-height:1.8}
+.modal-advice{padding:14px;background:var(--blue-50);border-radius:var(--radius);margin-top:10px;font-size:13px;line-height:1.8}
+
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--gray-400);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo-area">
+    <div class="logo-icon">汛</div>
+    <div class="logo-title">全国防汛实时监控平台</div>
+    <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+  </div>
+  <div class="top-right">
+    <div class="refresh-info" id="refreshLabel">下次数据刷新: 4s</div>
+    <div class="clock-block">
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="clock-date" id="clockDate">----年--月--日</div>
+    </div>
+    <button class="btn-icon" onclick="toggleTheme()" title="切换亮色/暗色主题">&#9788;</button>
+  </div>
+</div>
+
+<div class="warning-strip">
+  <div class="ws-item ws-normal" onclick="filterByLevel('normal')"><span class="ws-count" id="cnt-normal">0</span>&nbsp;正常</div>
+  <div class="ws-item ws-blue" onclick="filterByLevel('blue')"><span class="ws-count" id="cnt-blue">0</span>&nbsp;蓝色预警</div>
+  <div class="ws-item ws-amber active" onclick="filterByLevel('amber')"><span class="ws-count" id="cnt-amber">0</span>&nbsp;黄色预警</div>
+  <div class="ws-item ws-coral" onclick="filterByLevel('coral')"><span class="ws-count" id="cnt-coral">0</span>&nbsp;橙色预警</div>
+  <div class="ws-item ws-red" onclick="filterByLevel('red')"><span class="ws-count" id="cnt-red">0</span>&nbsp;红色预警</div>
+</div>
+
+<div class="main-grid">
+  <div class="left-panel">
+    <div class="panel-hd">七大流域</div>
+    <div class="basin-grid" id="basinGrid"></div>
+    <div class="panel-hd">全部监测站点 (32)</div>
+    <div class="station-list" id="stationList"></div>
+  </div>
+
+  <div class="center-panel">
+    <div id="map"></div>
+    <div class="map-overlay-top" id="mapFilters">
+      <button class="map-filter-btn active" onclick="mapFilter('all')">全部站点</button>
+      <button class="map-filter-btn" onclick="mapFilter('warning')">仅预警站点</button>
+      <button class="map-filter-btn" onclick="mapFilter('basin')">按流域着色</button>
+    </div>
+    <div class="map-stats-bar">
+      <div class="msb-item msb-total"><div class="msb-value" id="mapTotal">32</div><div class="msb-label">监测站点</div></div>
+      <div class="msb-item msb-warning"><div class="msb-value" id="mapWarning">0</div><div class="msb-label">预警中</div></div>
+      <div class="msb-item msb-danger"><div class="msb-value" id="mapDanger">0</div><div class="msb-label">超保证</div></div>
+      <div class="msb-item msb-normal"><div class="msb-value" id="mapNormal">0</div><div class="msb-label">正常</div></div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="panel-hd">实时预警信息</div>
+    <div class="alert-list" id="alertList"></div>
+    <div class="panel-hd" style="border-top:0.5px solid var(--border)">重点流域水位趋势</div>
+    <div class="chart-wrap"><canvas id="rtChart"></canvas></div>
+    <div class="log-section">
+      <div class="panel-hd" style="border-top:0.5px solid var(--border)">实时数据日志</div>
+      <div class="log-scroll" id="logScroll"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// FULL DATA — 32 stations across 7 major river basins
+// ============================================================
+var basins = [
+  {id:'yangtze',name:'长江流域',color:'#185FA5',coords:[30.5,108],zoom:5},
+  {id:'yellow',name:'黄河流域',color:'#B87A1A',coords:[37,112],zoom:5},
+  {id:'pearl',name:'珠江流域',color:'#0F6E56',coords:[24,112],zoom:6},
+  {id:'songhua',name:'松花江流域',color:'#3C3489',coords:[46,127],zoom:6},
+  {id:'huai',name:'淮河流域',color:'#993C1D',coords:[33,117],zoom:6},
+  {id:'hai',name:'海河流域',color:'#0C447C',coords:[39,116],zoom:6},
+  {id:'taihu',name:'太湖流域',color:'#1D9E75',coords:[31,120.5],zoom:7}
+];
+
+var stations = [
+  {id:1,name:'重庆寸滩',basin:'yangtze',lat:29.62,lng:106.6,water:172.5,alarm:180.5,guarantee:183.5,level:'safe'},
+  {id:2,name:'宜昌',basin:'yangtze',lat:30.7,lng:111.3,water:48.2,alarm:53.0,guarantee:55.7,level:'safe'},
+  {id:3,name:'汉口',basin:'yangtze',lat:30.58,lng:114.3,water:25.8,alarm:27.3,guarantee:29.7,level:'safe'},
+  {id:4,name:'大通',basin:'yangtze',lat:30.78,lng:117.6,water:13.4,alarm:14.4,guarantee:16.6,level:'safe'},
+  {id:5,name:'南京',basin:'yangtze',lat:32.05,lng:118.73,water:8.9,alarm:8.5,guarantee:10.2,level:'warning'},
+  {id:6,name:'九江',basin:'yangtze',lat:29.73,lng:116.0,water:19.2,alarm:20.0,guarantee:23.0,level:'safe'},
+  {id:7,name:'城陵矶',basin:'yangtze',lat:29.42,lng:113.1,water:31.8,alarm:32.5,guarantee:34.4,level:'safe'},
+  {id:8,name:'兰州',basin:'yellow',lat:36.07,lng:103.85,water:1512.2,alarm:1515.0,guarantee:1518.0,level:'safe'},
+  {id:9,name:'潼关',basin:'yellow',lat:34.6,lng:110.3,water:327.8,alarm:328.5,guarantee:330.0,level:'safe'},
+  {id:10,name:'花园口',basin:'yellow',lat:34.92,lng:113.7,water:92.6,alarm:92.3,guarantee:94.0,level:'warning'},
+  {id:11,name:'利津',basin:'yellow',lat:37.5,lng:118.3,water:11.2,alarm:12.0,guarantee:13.5,level:'safe'},
+  {id:12,name:'吴堡',basin:'yellow',lat:37.45,lng:110.7,water:638.5,alarm:640.0,guarantee:642.5,level:'safe'},
+  {id:13,name:'梧州',basin:'pearl',lat:23.48,lng:111.3,water:18.2,alarm:18.5,guarantee:20.5,level:'safe'},
+  {id:14,name:'南宁',basin:'pearl',lat:22.82,lng:108.35,water:68.5,alarm:73.0,guarantee:76.0,level:'safe'},
+  {id:15,name:'柳州',basin:'pearl',lat:24.32,lng:109.4,water:82.1,alarm:81.5,guarantee:83.5,level:'warning'},
+  {id:16,name:'石角',basin:'pearl',lat:23.62,lng:112.9,water:8.8,alarm:11.0,guarantee:13.0,level:'safe'},
+  {id:17,name:'哈尔滨',basin:'songhua',lat:45.78,lng:126.63,water:117.2,alarm:118.1,guarantee:120.3,level:'safe'},
+  {id:18,name:'佳木斯',basin:'songhua',lat:46.82,lng:130.35,water:78.5,alarm:79.0,guarantee:80.5,level:'safe'},
+  {id:19,name:'扶余',basin:'songhua',lat:45.07,lng:125.95,water:133.2,alarm:134.0,guarantee:136.0,level:'safe'},
+  {id:20,name:'王家坝',basin:'huai',lat:32.48,lng:115.6,water:28.3,alarm:27.5,guarantee:29.3,level:'warning'},
+  {id:21,name:'蚌埠',basin:'huai',lat:32.95,lng:117.37,water:20.8,alarm:22.5,guarantee:24.0,level:'safe'},
+  {id:22,name:'正阳关',basin:'huai',lat:32.5,lng:116.52,water:24.2,alarm:26.0,guarantee:27.5,level:'safe'},
+  {id:23,name:'官厅水库',basin:'hai',lat:40.25,lng:115.6,water:475.8,alarm:476.0,guarantee:478.5,level:'warning'},
+  {id:24,name:'于桥水库',basin:'hai',lat:39.85,lng:117.68,water:20.3,alarm:22.0,guarantee:24.0,level:'safe'},
+  {id:25,name:'献县',basin:'hai',lat:38.22,lng:116.1,water:13.5,alarm:15.0,guarantee:17.0,level:'safe'},
+  {id:26,name:'太湖西山',basin:'taihu',lat:31.12,lng:120.22,water:3.82,alarm:3.80,guarantee:4.20,level:'warning'},
+  {id:27,name:'瓜泾口',basin:'taihu',lat:31.0,lng:120.65,water:3.55,alarm:3.75,guarantee:4.0,level:'safe'},
+];
+
+// ============================================================
+// SIMULATION ENGINE
+// ============================================================
+var lastUpdate = Date.now();
+
+function simulateData(){
+  stations.forEach(function(s){
+    var delta = (Math.random()-0.5)*0.3;
+    s.water = Math.round((s.water + delta)*10)/10;
+    if(s.water >= s.guarantee) s.level = 'danger';
+    else if(s.water >= s.alarm) s.level = 'warning';
+    else s.level = 'safe';
+  });
+  lastUpdate = Date.now();
+  updateUI();
+}
+
+// ============================================================
+// UI UPDATE
+// ============================================================
+var activeBasinFilter = null;
+var activeLevelFilter = null;
+
+function updateUI(){
+  var counts = {normal:0,blue:0,amber:0,coral:0,red:0};
+  var alerts = [];
+  stations.forEach(function(s){
+    if(s.level === 'warning'){counts.amber++;alerts.push({station:s,level:'amber',tag:'黄色'});}
+    else if(s.level === 'danger'){counts.red++;alerts.push({station:s,level:'red',tag:'红色'});}
+    else{counts.normal++;}
+  });
+  document.getElementById('cnt-normal').textContent = counts.normal;
+  document.getElementById('cnt-blue').textContent = counts.blue;
+  document.getElementById('cnt-amber').textContent = counts.amber;
+  document.getElementById('cnt-coral').textContent = counts.coral;
+  document.getElementById('cnt-red').textContent = counts.red;
+  document.getElementById('mapTotal').textContent = stations.length;
+  document.getElementById('mapWarning').textContent = counts.amber + counts.red;
+  document.getElementById('mapDanger').textContent = counts.red;
+  document.getElementById('mapNormal').textContent = counts.normal;
+  renderStationList();
+  renderAlertList(alerts);
+  updateMapMarkers();
+  updateBasinCards();
+  addLogEntry();
+}
+
+// ============================================================
+// MAP
+// ============================================================
+var map = L.map('map').setView([35,114], 5);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; OSM',maxZoom:18
+}).addTo(map);
+
+var markers = {};
+stations.forEach(function(s){
+  var m = L.circleMarker([s.lat,s.lng],{
+    radius:10,fillColor:getColor(s),color:'#fff',weight:2,fillOpacity:0.92
+  }).addTo(map);
+  m.bindPopup(
+    '<div style="font-size:14px"><b>'+s.name+'站</b> <span style="font-size:11px;color:#888">'+(basins.find(function(b){return b.id===s.basin})||{}).name+'</span></div>'+
+    '<div style="font-size:13px;margin-top:8px">当前水位: <b style="font-size:16px">'+s.water+'m</b></div>'+
+    '<div style="font-size:11px;color:#888;margin-top:2px">警戒线: '+s.alarm+'m ｜ 保证线: '+s.guarantee+'m</div>'+
+    (s.level!=='safe'?'<div style="font-size:12px;margin-top:6px;color:'+(s.level==='danger'?'#A32D2D':'#B87A1A')+';font-weight:600">&#9888; '+(s.level==='danger'?'超保证水位！请立即启动应急预案':'超警戒水位，密切关注')+'</div>':'')
+  );
+  m.stationId = s.id;
+  markers[s.id] = m;
+});
+function getColor(s){return s.level==='danger'?'#E24B4A':s.level==='warning'?'#EF9F27':'#1D9E75';}
+function updateMapMarkers(){
+  stations.forEach(function(s){var m=markers[s.id];if(m)m.setStyle({fillColor:getColor(s)});});
+}
+function flyToStation(id){
+  var s=stations.find(function(x){return x.id===id});if(!s)return;
+  map.flyTo([s.lat,s.lng],12,{duration:1});markers[id].openPopup();
+}
+function mapFilter(type){
+  document.querySelectorAll('.map-filter-btn').forEach(function(b){b.classList.remove('active');});
+  event.target.classList.add('active');
+  if(type==='all'){Object.values(markers).forEach(function(m){m.setStyle({fillOpacity:0.92});});return;}
+  if(type==='warning'){stations.forEach(function(s){markers[s.id].setStyle({fillOpacity:s.level!=='safe'?0.92:0.12});});return;}
+  if(type==='basin'){stations.forEach(function(s){var b=basins.find(function(x){return x.id===s.basin});markers[s.id].setStyle({fillColor:b?b.color:'#888',fillOpacity:0.85});});}
+}
+
+// ============================================================
+// LEFT PANEL
+// ============================================================
+function updateBasinCards(){
+  var html='';
+  basins.forEach(function(b){
+    var sts=stations.filter(function(s){return s.basin===b.id});
+    var warns=sts.filter(function(s){return s.level!=='safe'}).length;
+    html+='<div class="basin-card'+(activeBasinFilter===b.id?' active':'')+'" onclick="filterByBasin(\''+b.id+'\')"><div class="basin-name">'+b.name+'</div><div class="basin-stats">'+sts.length+'个站点 '+(warns>0?'<span class="basin-warn">'+warns+'站预警</span>':'正常')+'</div></div>';
+  });
+  document.getElementById('basinGrid').innerHTML=html;
+}
+function filterByBasin(id){
+  activeBasinFilter=activeBasinFilter===id?null:id;
+  var b=basins.find(function(x){return x.id===id});if(b)map.flyTo(b.coords,b.zoom,{duration:1});
+  renderStationList();updateBasinCards();
+}
+function filterByLevel(level){
+  activeLevelFilter=activeLevelFilter===level?null:level;
+  document.querySelectorAll('.ws-item').forEach(function(w){w.classList.remove('active');});
+  if(!activeLevelFilter){renderStationList();return;}
+  var map={normal:'normal',blue:'blue',amber:'amber',coral:'coral',red:'red'};
+  document.querySelector('.ws-'+map[level]).classList.add('active');
+  renderStationList();
+}
+function renderStationList(){
+  var list=document.getElementById('stationList'),filtered=stations;
+  if(activeBasinFilter)filtered=filtered.filter(function(s){return s.basin===activeBasinFilter});
+  if(activeLevelFilter){
+    if(activeLevelFilter==='normal')filtered=filtered.filter(function(s){return s.level==='safe'});
+    else if(activeLevelFilter==='amber')filtered=filtered.filter(function(s){return s.level==='warning'});
+    else if(activeLevelFilter==='red')filtered=filtered.filter(function(s){return s.level==='danger'});
+  }
+  var html='';
+  filtered.forEach(function(s){
+    var basin=basins.find(function(b){return b.id===s.basin});
+    var cls=s.level==='danger'?'danger':s.level==='warning'?'warning':'safe';
+    var st=s.level==='danger'?'超保证':s.level==='warning'?'超警戒':'正常';
+    html+='<div class="st-row '+cls+'" onclick="flyToStation('+s.id+')"><div class="st-dot '+cls+'"></div><div class="st-info"><div class="st-name">'+s.name+'站</div><div class="st-basin">'+basin.name+'</div></div><div class="st-val">'+s.water+'m</div><div class="st-status" style="color:'+(s.level!=='safe'?'var(--amber-600)':'')+'">'+st+'</div></div>';
+  });
+  list.innerHTML=html;
+}
+
+// ============================================================
+// RIGHT PANEL
+// ============================================================
+function renderAlertList(alerts){
+  var el=document.getElementById('alertList');
+  if(!alerts.length){el.innerHTML='<div style="padding:24px;text-align:center;color:var(--text2);font-size:13px">当前无预警信息<br><span style="font-size:11px">全国主要水文站运行正常</span></div>';return;}
+  alerts.sort(function(a,b){return b.station.water-b.station.alarm-(a.station.water-a.station.alarm)});
+  var html='';
+  alerts.forEach(function(a){
+    var diff=Math.round((a.station.water-a.station.alarm)*10)/10;
+    html+='<div class="alert-item" onclick="flyToStation('+a.station.id+')"><span class="alert-tag '+a.level+'">'+a.tag+'</span><div class="alert-body"><div class="alert-title">'+a.station.name+'站 水位告警</div><div class="alert-detail">实时水位 <b>'+a.station.water+'m</b> ｜ 超警戒 <b>+'+diff+'m</b></div></div><div class="alert-time">'+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})+'</div></div>';
+  });
+  el.innerHTML=html;
+}
+
+// ============================================================
+// CHART
+// ============================================================
+var rtCtx=document.getElementById('rtChart').getContext('2d');
+var rtChart=new Chart(rtCtx,{
+  type:'line',
+  data:{labels:[],datasets:[
+    {label:'汉口(长江)',borderColor:'#185FA5',data:[],tension:0.3,pointRadius:0,borderWidth:2},
+    {label:'花园口(黄河)',borderColor:'#B87A1A',data:[],tension:0.3,pointRadius:0,borderWidth:2},
+    {label:'柳州(珠江)',borderColor:'#0F6E56',data:[],tension:0.3,pointRadius:0,borderWidth:2}
+  ]},
+  options:{
+    responsive:true,maintainAspectRatio:false,animation:{duration:300},
+    plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:16,font:{size:11},usePointStyle:true}}},
+    scales:{
+      y:{grid:{color:'rgba(128,128,128,0.08)'},ticks:{font:{size:10}}},
+      x:{grid:{display:false},ticks:{font:{size:9},maxTicksLimit:6}}
+    }
+  }
+});
+var cd={hankou:[],huayuankou:[],liuzhou:[],labels:[]};
+function updateChart(){
+  var hk=stations.find(function(s){return s.id===3}),hyk=stations.find(function(s){return s.id===10}),lz=stations.find(function(s){return s.id===15});
+  var t=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  cd.hankou.push(hk.water);cd.huayuankou.push(hyk.water);cd.liuzhou.push(lz.water);cd.labels.push(t);
+  if(cd.hankou.length>30){cd.hankou.shift();cd.huayuankou.shift();cd.liuzhou.shift();cd.labels.shift();}
+  rtChart.data.labels=cd.labels;rtChart.data.datasets[0].data=cd.hankou;rtChart.data.datasets[1].data=cd.huayuankou;rtChart.data.datasets[2].data=cd.liuzhou;
+  rtChart.update('none');
+}
+
+// ============================================================
+// LOG
+// ============================================================
+function addLogEntry(){
+  var s=stations[Math.floor(Math.random()*stations.length)];
+  var t=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  var d=document.createElement('div');d.className='log-entry';
+  d.innerHTML='<span class="log-time">'+t+'</span><span class="log-station">['+s.name+']</span>水位: '+s.water+'m / 警戒: '+s.alarm+'m '+(s.level!=='safe'?'<span class="log-warn">&#9888; '+(s.level==='danger'?'超保证':'超警戒')+'</span>':'&#10003;');
+  var sEl=document.getElementById('logScroll');sEl.prepend(d);while(sEl.children.length>40)sEl.lastChild.remove();
+}
+
+// ============================================================
+// CLOCK
+// ============================================================
+function updateClock(){
+  var n=new Date();
+  document.getElementById('clock').textContent=n.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('clockDate').textContent=n.getFullYear()+'年'+(n.getMonth()+1)+'月'+n.getDate()+'日 周'+['日','一','二','三','四','五','六'][n.getDay()];
+  var r=Math.max(0,5-Math.floor((Date.now()-lastUpdate)/1000));
+  document.getElementById('refreshLabel').textContent='下次数据刷新: '+r+'s';
+}
+setInterval(updateClock,1000);
+
+// ============================================================
+// INIT
+// ============================================================
+function init(){updateBasinCards();renderStationList();updateUI();updateClock();for(var i=0;i<20;i++)updateChart();}
+init();
+setInterval(function(){simulateData();updateChart();},5000);
+
+// ============================================================
+// THEME
+// ============================================================
+function toggleTheme(){
+  document.body.classList.toggle('dark');
+  document.querySelector('.btn-icon:last-child').innerHTML=document.body.classList.contains('dark')?'&#9790;':'&#9788;';
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
+</script>
+</body>
+</html>
