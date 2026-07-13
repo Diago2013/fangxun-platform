@@ -217,7 +217,7 @@ body{
     <span class="live-badge"><span class="live-dot"></span>LIVE</span>
   </div>
   <div class="top-right">
-    <div class="refresh-info" id="refreshLabel">下次数据刷新: 4s</div>
+    <div class="refresh-info" id="refreshLabel">下次数据刷新: 29分钟</div>
     <div class="clock-block">
       <div class="clock" id="clock">--:--:--</div>
       <div class="clock-date" id="clockDate">----年--月--日</div>
@@ -511,8 +511,8 @@ function updateClock(){
   var n=new Date();
   document.getElementById('clock').textContent=n.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   document.getElementById('clockDate').textContent=n.getFullYear()+'年'+(n.getMonth()+1)+'月'+n.getDate()+'日 周'+['日','一','二','三','四','五','六'][n.getDay()];
-  var r=Math.max(0,5-Math.floor((Date.now()-lastUpdate)/1000));
-  document.getElementById('refreshLabel').textContent='下次数据刷新: '+r+'s';
+  var r=Math.max(0,1800-Math.floor((Date.now()-lastUpdate)/1000));
+  document.getElementById('refreshLabel').textContent='下次数据刷新: '+Math.ceil(r/60)+'分钟';
 }
 setInterval(updateClock,1000);
 
@@ -521,7 +521,7 @@ setInterval(updateClock,1000);
 // ============================================================
 function init(){updateBasinCards();renderStationList();updateUI();updateClock();for(var i=0;i<20;i++)updateChart();}
 init();
-setInterval(function(){simulateData();updateChart();},5000);
+setInterval(function(){simulateData();updateChart();},1800000);
 
 // ============================================================
 // THEME
